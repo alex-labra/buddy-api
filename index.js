@@ -29,7 +29,6 @@ const pool2 = mysql2.createPool({
 //jwt 
 const JWT_SECRET_KEY = process.env.JWT_KEY;
 const options = { expiresIn: '6h' };
-const payload = { userID: '123' };
 
 //Verify token endpoint
 app.get('/api/auth', authenticateToken, (req, res) => {
@@ -49,7 +48,6 @@ function authenticateToken(req, res, next) {
         if (error) {
             return res.status(403).send('Invalid token!');
         }
-        req.user = user;
         return res.status(200).send('Token is valid!');
         // or you can send additional data along with the success response
         // return res.status(200).json({ message: 'Token is valid!', user });
@@ -68,7 +66,6 @@ app.get('/login', async (req, res) => {
         // Check if user exists in the database
         const [results] = await pool2.query('SELECT * FROM users WHERE email = ?', [email]);
 
-        //logic is done after the pool query body for promises
         const user = results[0];
         if (!user || password !== user.password) {
             return res.status(401).send('Authentication failed. Wrong email or password.');
@@ -87,7 +84,6 @@ app.get('/login', async (req, res) => {
 app.post('/emailService', (req, res) => {
     const { email, fullName, phoneNumber, message } = req.body;
 
-    // Set your SendGrid API key
     sgMail.setApiKey(process.env.SENDGRID_API_KEY);
 
     const msg = {
