@@ -88,7 +88,7 @@ app.post('/newUser', (req, res) => {
     const type = req.body.type;
     const password = req.body.password;
     const avatar = req.body.avatar;
-    pool.query('INSERT INTO users VALUES(?,?,?,?,?,?,?)',[userID,first_name,last_name,email,type,password,avatar] , (error, results) => {
+    pool.query('INSERT INTO users(first_name, last_name, email, type, password) VALUES(?,?,?,?,?)',[first_name,last_name,email,type,password,avatar] , (error, results) => {
         if(error){
             console.error('Error: ', error);
             res.status(500).json({Error: 'An error just ocurred!!!'})
