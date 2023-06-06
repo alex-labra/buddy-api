@@ -3,10 +3,14 @@ const sgMail = require('@sendgrid/mail');
 const jwt = require('jsonwebtoken');
 const mysql = require('mysql2');
 const mysql2 = require('mysql2/promise'); //promise package
+const cors = require('cors'); 
 const app = express();
 
 app.use(express.json());
 require('dotenv').config();
+
+// Enable CORS for all routes
+app.use(cors());
 
 // Create a connection pool for database
 const pool = mysql.createPool({
