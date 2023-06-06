@@ -59,7 +59,7 @@ function authenticateToken(req, res, next) {
 }
 
 //check login info
-app.get('/login', async (req, res) => {
+app.post('/login', async (req, res) => {
     const { email, password } = req.body;
 
     if (!email || !password) {
