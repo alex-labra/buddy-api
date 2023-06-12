@@ -206,6 +206,69 @@ app.post('/update-name', async (req, res) => {
     }
 });
 
+//SETTINGS: update password
+app.post('/update-password', async (req, res) => {
+    const { email, oldPassword, newPassword } = req.body;
+
+    if (!email || !oldPassword || !newPassword) {
+        return res.status(400).send('Email, old password, and new password are required.');
+    }
+
+    try {
+        // Check if the user exists
+        const [userResults] = await pool2.query('SELECT * FROM users WHERE email = ?', [email]);
+        const user = userResults[0];
+
+        if (!user) {
+            return res.status(404).send('User not found.');
+        }
+
+        // Check if the old password matches
+        if (user.password !== oldPassword) {
+            return res.status(401).send('Invalid old password.');
+        }
+
+        // Update the user's password
+        await pool2.query('UPDATE users SET password = ? WHERE email = ?', [newPassword, email]);
+
+        res.status(200).send('Password updated successfully.');
+    } catch (error) {
+        console.error(error);
+        return res.status(500).send('Server error');
+    }
+});
+
+//SETTINGS: update email
+app.post('/update-email', async (req, res) => {
+    const { oldEmail, password, newEmail } = req.body;
+
+    if (!oldEmail || !password || !newEmail) {
+        return res.status(400).send('Old email, password, and new email are required.');
+    }
+
+    try {
+        // Check if the user exists
+        const [userResults] = await pool2.query('SELECT * FROM users WHERE email = ?', [oldEmail]);
+        const user = userResults[0];
+
+        if (!user) {
+            return res.status(404).send('User not found.');
+        }
+
+        // Check if the password matches
+        if (user.password !== password) {
+            return res.status(401).send('Invalid password.');
+        }
+
+        // Update the user's email
+        await pool2.query('UPDATE users SET email = ? WHERE email = ?', [newEmail, oldEmail]);
+
+        res.status(200).send('Email updated successfully.');
+    } catch (error) {
+        console.error(error);
+        return res.status(500).send('Server error');
+    }
+});
 
 // Endpoint to send newUser Data to the DataBase
 app.post('/newUser', (req, res) => {
