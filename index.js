@@ -77,13 +77,14 @@ app.post('/login', async (req, res) => {
 
         // Create token and send it to the user
         const token = jwt.sign({ email: user.email, type: user.type }, JWT_SECRET_KEY, options);
-        res.json({ token });
+        res.json({ token, type: user.type, email: user.email });
     } catch (error) {
         console.error(error);
         return res.status(500).send('Server error');
     }
 });
 
+//enroll students in a class
 app.post('/enroll', async (req, res) => {
     const { emails, className, teacherEmail } = req.body;
 
@@ -127,8 +128,8 @@ app.post('/enroll', async (req, res) => {
             await pool2.query('INSERT INTO user_classes (userID, classID) VALUES (?, ?)', [userID, classID]);
             console.log(`User with email ${email} enrolled in the class successfully.`);
         }
-        
-res.status(200).send('Enrollment completed.');
+
+        res.status(200).send('Enrollment completed.');
     } catch (error) {
         console.error(error);
         return res.status(500).send('Server error');
@@ -289,38 +290,40 @@ app.post('/newUser', (req, res) => {
     });
 })
 
-app.post('/newClass', async (req,res) => {
-    const className = req.body.className;
-    const email = req.body.email;
-    if (!email || !className) {
-        return res.status(400).send('Emails and class name are required.');
+//create new quiz
+app.post('/createQuiz', async (req, res) => {
+    const { quizName, quizDifficulty, quizSubject, quizData, className, email } = req.body;
+  
+    try {
+      // Get the classID based on className and email
+      const [classResults] = await pool2.query('SELECT classID FROM classes WHERE className = ? AND teacherID IN (SELECT userID FROM users WHERE email = ?)', [className, email]);
+      const classID = classResults[0].classID;
+  
+      // Insert the quiz into the quizzes table
+      const [quizResult] = await pool2.query('INSERT INTO quizzes (classID, quizName, quizDifficulty, quizSubject) VALUES (?, ?, ?, ?)', [classID, quizName, quizDifficulty, quizSubject]);
+      const quizID = quizResult.insertId;
+  
+      // Insert the questions and choices into the questions and choices tables
+      for (const questionData of quizData) {
+        const { question, choices, answer } = questionData;
+  
+        // Insert the question into the questions table
+        const [questionResult] = await pool2.query('INSERT INTO questions (quizID, answer) VALUES (?, ?)', [quizID, answer]);
+        const questionID = questionResult.insertId;
+  
+        // Insert the choices into the choices table
+        await pool2.query('INSERT INTO choices (questionID, option1, option2, option3, option4) VALUES (?, ?, ?, ?, ?)', [questionID, ...choices]);
+      }
+  
+      // Insert the quiz into the quiz_for_class table
+      await pool2.query('INSERT INTO quiz_for_class (quizID, classID) VALUES (?, ?)', [quizID, classID]);
+  
+      res.status(200).send('Quiz created successfully.');
+    } catch (error) {
+      console.error(error);
+      return res.status(500).send('Server error');
     }
-
-    try{
-        const [typeResult] = await pool2.query('SELECT * FROM users WHERE email =?', [email]);
-        const typeInfo = typeResult[0];
-        const userType = typeInfo.type;
-        const userU = typeInfo.userID;
-        const [classResults] = await pool2.query('SELECT * FROM classes WHERE className = ? && teacherID = ?', [className, userU]);
-        const classInfo = classResults[0];
-        const classID = classInfo.classID;
-        const ClassName = classInfo.className;
-        console.log(typeResult);
-       if (userType =='teacher' &&  ClassName.toLowerCase() != className.toLowerCase() ){
-        await pool2.query('INSERT INTO classes (className,teacherID) VALUES(?,?)', [className, userU]);
-        await pool2.query('INSERT INTO user_classes (userID,classID) VALUES(?,?)',[userU,classID]);
-           }
-        else{
-            res.status(400).send("User is not a teacher or no records found")
-        }
-    }
-    catch(error) {
-        console.log(error);
-        return res.status(500).send('Server Error')
-    }
-    res.status(200).send('Class was added successfully ')
-})
-
+  });  
 
 //Endpoint to send email to SendGrid API from contact form
 app.post('/emailService', (req, res) => {
@@ -352,4 +355,3 @@ app.listen(process.env.PORT, () => {
 });
 
 
-// use some if statement to to catch some errors 
