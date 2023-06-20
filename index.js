@@ -135,6 +135,140 @@ res.status(200).send('Enrollment completed.');
     }
 });
 
+//delete a class
+app.post('/delete-class', async (req, res) => {
+    const { className, userEmail } = req.body;
+
+    if (!className || !userEmail) {
+        return res.status(400).send('Class name and user email are required.');
+    }
+
+    try {
+        // Teacher details
+        const [teacherResults] = await pool2.query('SELECT type, userID FROM users WHERE email = ?', [userEmail]);
+        const teacherInfo = teacherResults[0];
+        const teacherType = teacherInfo.type;
+        const teacherID = teacherInfo.userID;
+
+        // Check if the user is a teacher
+        if (teacherType !== 'teacher') {
+            return res.status(403).send('Access denied. Only teachers can delete classes.');
+        }
+
+        // Check if the class exists
+        const [classResults] = await pool2.query('SELECT * FROM classes WHERE className = ? AND teacherID = ?', [className, teacherID]);
+        const classInfo = classResults[0];
+        if (!classInfo) {
+            return res.status(404).send('Class not found.');
+        }
+
+        const classID = classInfo.classID;
+
+        // Delete the class
+        await pool2.query('DELETE FROM classes WHERE classID = ?', [classID]);
+
+        res.status(200).send('Class deleted successfully.');
+    } catch (error) {
+        console.error(error);
+        return res.status(500).send('Server error');
+    }
+});
+
+//SETTINGS: update name
+app.post('/update-name', async (req, res) => {
+    const { email, password, newFirstName, newLastName } = req.body;
+
+    if (!email || !password || !newFirstName || !newLastName) {
+        return res.status(400).send('Email, password, first name, and last name are required.');
+    }
+
+    try {
+        // Check if the user exists
+        const [userResults] = await pool2.query('SELECT * FROM users WHERE email = ?', [email]);
+        const user = userResults[0];
+
+        if (!user) {
+            return res.status(404).send('User not found.');
+        }
+
+        // Check if the password matches
+        if (user.password !== password) {
+            return res.status(401).send('Invalid password.');
+        }
+
+        // Update the user's first name and last name
+        await pool2.query('UPDATE users SET first_name = ?, last_name = ? WHERE email = ?', [newFirstName, newLastName, email]);
+
+        res.status(200).send('Name updated successfully.');
+    } catch (error) {
+        console.error(error);
+        return res.status(500).send('Server error');
+    }
+});
+
+//SETTINGS: update password
+app.post('/update-password', async (req, res) => {
+    const { email, oldPassword, newPassword } = req.body;
+
+    if (!email || !oldPassword || !newPassword) {
+        return res.status(400).send('Email, old password, and new password are required.');
+    }
+
+    try {
+        // Check if the user exists
+        const [userResults] = await pool2.query('SELECT * FROM users WHERE email = ?', [email]);
+        const user = userResults[0];
+
+        if (!user) {
+            return res.status(404).send('User not found.');
+        }
+
+        // Check if the old password matches
+        if (user.password !== oldPassword) {
+            return res.status(401).send('Invalid old password.');
+        }
+
+        // Update the user's password
+        await pool2.query('UPDATE users SET password = ? WHERE email = ?', [newPassword, email]);
+
+        res.status(200).send('Password updated successfully.');
+    } catch (error) {
+        console.error(error);
+        return res.status(500).send('Server error');
+    }
+});
+
+//SETTINGS: update email
+app.post('/update-email', async (req, res) => {
+    const { oldEmail, password, newEmail } = req.body;
+
+    if (!oldEmail || !password || !newEmail) {
+        return res.status(400).send('Old email, password, and new email are required.');
+    }
+
+    try {
+        // Check if the user exists
+        const [userResults] = await pool2.query('SELECT * FROM users WHERE email = ?', [oldEmail]);
+        const user = userResults[0];
+
+        if (!user) {
+            return res.status(404).send('User not found.');
+        }
+
+        // Check if the password matches
+        if (user.password !== password) {
+            return res.status(401).send('Invalid password.');
+        }
+
+        // Update the user's email
+        await pool2.query('UPDATE users SET email = ? WHERE email = ?', [newEmail, oldEmail]);
+
+        res.status(200).send('Email updated successfully.');
+    } catch (error) {
+        console.error(error);
+        return res.status(500).send('Server error');
+    }
+});
 
 // Endpoint to send newUser Data to the DataBase
 app.post('/newUser', (req, res) => {
