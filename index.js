@@ -127,8 +127,8 @@ app.post('/enroll', async (req, res) => {
             await pool2.query('INSERT INTO user_classes (userID, classID) VALUES (?, ?)', [userID, classID]);
             console.log(`User with email ${email} enrolled in the class successfully.`);
         }
-
-        res.status(200).send('Enrollment completed.');
+        
+res.status(200).send('Enrollment completed.');
     } catch (error) {
         console.error(error);
         return res.status(500).send('Server error');
@@ -153,6 +153,38 @@ app.post('/newUser', (req, res) => {
             res.send("Posted")
         }
     });
+})
+
+app.post('/newClass', async (req,res) => {
+    const className = req.body.className;
+    const email = req.body.email;
+    if (!email || !className) {
+        return res.status(400).send('Emails and class name are required.');
+    }
+
+    try{
+        const [typeResult] = await pool2.query('SELECT * FROM users WHERE email =?', [email]);
+        const typeInfo = typeResult[0];
+        const userType = typeInfo.type;
+        const userU = typeInfo.userID;
+        const [classResults] = await pool2.query('SELECT * FROM classes WHERE className = ? && teacherID = ?', [className, userU]);
+        const classInfo = classResults[0];
+        const classID = classInfo.classID;
+        const ClassName = classInfo.className;
+        console.log(typeResult);
+       if (userType =='teacher' &&  ClassName.toLowerCase() != className.toLowerCase() ){
+        await pool2.query('INSERT INTO classes (className,teacherID) VALUES(?,?)', [className, userU]);
+        await pool2.query('INSERT INTO user_classes (userID,classID) VALUES(?,?)',[userU,classID]);
+           }
+        else{
+            res.status(400).send("User is not a teacher or no records found")
+        }
+    }
+    catch(error) {
+        console.log(error);
+        return res.status(500).send('Server Error')
+    }
+    res.status(200).send('Class was added successfully ')
 })
 
 
@@ -186,3 +218,4 @@ app.listen(process.env.PORT, () => {
 });
 
 
+// use some if statement to to catch some errors 
