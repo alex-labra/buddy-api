@@ -322,6 +322,71 @@ app.post('/createQuiz', async (req, res) => {
     }
   });
   
+  //record score for quiz
+  app.post('/recordScore', async (req, res) => {
+    const { email, quizID, score } = req.body;
+  
+    try {
+        // Get the userID based on email
+        const [userResults] = await pool2.query('SELECT userID FROM users WHERE email = ?', [email]);
+        const userID = userResults[0].userID;
+  
+        // Insert the score into the scores table
+        await pool2.query('INSERT INTO scores (userID, quizID, score) VALUES (?, ?, ?)', [userID, quizID, score]);
+  
+        res.status(200).send('Score recorded successfully');
+    } catch (err) {
+        console.error(err);
+        res.status(500).send('Error recording score');
+    }
+});
+
+//get all the user data
+app.get('/getUserData', async (req, res) => {
+    const { email } = req.query;
+    console.log(email);
+  
+    try {
+        // Get the user data based on email
+        const [userResults] = await pool2.query('SELECT userID, first_name, last_name, email, type FROM users WHERE email = ?', [email]);
+        const userData = userResults[0];
+  
+        // Get the classes the user is registered to
+        const [classResults] = await pool2.query('SELECT * FROM classes WHERE classID IN (SELECT classID FROM user_classes WHERE userID = ?)', [userData.userID]);
+        userData.classes = classResults;
+  
+        // Get the quizzes for each class
+        for (const classData of userData.classes) {
+            const [quizResults] = await pool2.query('SELECT * FROM quizzes WHERE classID = ?', [classData.classID]);
+            classData.quizzes = quizResults;
+  
+            // Get the questions and choices for each quiz
+            for (const quizData of classData.quizzes) {
+                const [questionResults] = await pool2.query('SELECT * FROM questions WHERE quizID = ?', [quizData.quizID]);
+                quizData.questions = questionResults;
+  
+                for (const questionData of quizData.questions) {
+                    const [choiceResults] = await pool2.query('SELECT * FROM choices WHERE questionID = ?', [questionData.questionID]);
+                    questionData.choices = choiceResults;
+                }
+  
+                // Get the score for the quiz, if any
+                const [scoreResults] = await pool2.query('SELECT score FROM scores WHERE userID = ? AND quizID = ?', [userData.userID, quizData.quizID]);
+                if (scoreResults.length > 0) {
+                    quizData.score = scoreResults[0].score;
+                }
+            }
+        }
+  
+        res.status(200).json(userData);
+    } catch (err) {
+        console.error(err);
+        res.status(500).send('Error retrieving user data');
+    }
+});
+
+
+
 
 app.post('/newClass', async (req, res) => {
     const className = req.body.className;
