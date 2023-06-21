@@ -344,7 +344,6 @@ app.post('/createQuiz', async (req, res) => {
 //get all the user data
 app.get('/getUserData', async (req, res) => {
     const { email } = req.query;
-    console.log(email);
   
     try {
         // Get the user data based on email
