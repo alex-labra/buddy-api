@@ -395,48 +395,51 @@ app.post('/retrieveQuizzes', async (req, res) => {
 app.get('/userDetails', async (req, res) => {
     const { email } = req.query;
     try {
-        // Retrieve the user's details based on the email
-        const [userResults] = await pool2.query('SELECT * FROM users WHERE email = ?', [email]);
-        const user = userResults[0];
-
-        if (!user) {
-            return res.status(404).send('User not found');
+      // Retrieve the user's details based on the email
+      const [userResults] = await pool2.query('SELECT * FROM users WHERE email = ?', [email]);
+      const user = userResults[0];
+  
+      if (!user) {
+        return res.status(404).send('User not found');
+      }
+  
+      // Retrieve the class names and quiz details associated with the user
+      const [classResults] = await pool2.query(
+        `SELECT c.className, q.quizID, q.quizName
+         FROM classes c
+         INNER JOIN user_classes uc ON c.classID = uc.classID
+         INNER JOIN users u ON uc.userID = u.userID
+         INNER JOIN quizzes q ON c.classID = q.classID
+         WHERE u.email = ?`,
+        [email]
+      );
+  
+      const classQuizzes = {};
+  
+      for (const classData of classResults) {
+        const { className, quizID, quizName } = classData;
+  
+        if (!classQuizzes[className]) {
+          classQuizzes[className] = [];
         }
-
-        // Retrieve the class names associated with the user
-        const [classResults] = await pool2.query(
-            'SELECT c.className FROM classes c INNER JOIN user_classes uc ON c.classID = uc.classID INNER JOIN users u ON uc.userID = u.userID WHERE u.email = ?',
-            [email]
-        );
-        const classNames = classResults.map(result => result.className);
-
-        // Retrieve the quiz names for each class
-        const quizNamesByClass = {};
-
-        for (const className of classNames) {
-            const [quizResults] = await pool2.query(
-                'SELECT q.quizName FROM quizzes q INNER JOIN classes c ON q.classID = c.classID WHERE c.className = ?',
-                [className]
-            );
-
-            const quizNames = quizResults.map(result => result.quizName);
-            quizNamesByClass[className] = quizNames;
-        }
-
-        const userDetails = {
-            firstName: user.first_name,
-            lastName: user.last_name,
-            email: user.email,
-            classNames: classNames,
-            quizNamesByClass: quizNamesByClass
-        };
-
-        res.status(200).json(userDetails);
+  
+        classQuizzes[className].push({ quizID, quizName });
+      }
+  
+      const userDetails = {
+        firstName: user.first_name,
+        lastName: user.last_name,
+        email: user.email,
+        classQuizzes: classQuizzes,
+      };
+      
+      res.status(200).json(userDetails);
     } catch (error) {
-        console.error(error);
-        return res.status(500).send('Server error');
+      console.error(error);
+      return res.status(500).send('Server error');
     }
-});
+  });
+  
 
 
 //record score for quiz
@@ -501,8 +504,35 @@ app.get('/getUserData', async (req, res) => {
     }
 });
 
-
-
+//set Quiz details
+app.post('/setQuizDetails', async (req, res) => {
+    const { quizID, dueDate, timeLimit } = req.body;
+  
+    try {
+      // Update the quiz details
+      await pool2.query('UPDATE quizzes SET dueDate = ?, timeLimit = ? WHERE quizID = ?', [dueDate, timeLimit, quizID]);
+  
+      // Retrieve the updated quiz details
+      const [quizResults] = await pool2.query('SELECT quizName, dueDate, timeLimit FROM quizzes WHERE quizID = ?', [quizID]);
+      const quiz = quizResults[0];
+  
+      if (!quiz) {
+        return res.status(404).send('Quiz not found');
+      }
+  
+      const quizDetails = {
+        quizName: quiz.quizName,
+        dueDate: quiz.dueDate,
+        timeLimit: quiz.timeLimit
+      };
+  
+      res.status(200).json(quizDetails);
+    } catch (error) {
+      console.error(error);
+      res.status(500).send('Error updating quiz details');
+    }
+  });
+  
 
 app.post('/newClass', async (req, res) => {
     const className = req.body.className;
