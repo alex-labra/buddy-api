@@ -303,6 +303,16 @@ app.post('/createQuiz', async (req, res) => {
         const [quizResult] = await pool2.query('INSERT INTO quizzes (classID, quizName, quizDifficulty, quizSubject) VALUES (?, ?, ?, ?)', [classID, quizName, quizDifficulty, quizSubject]);
         const quizID = quizResult.insertId;
 
+        // Retrieve the class name for the newly created quiz
+        const [classResult] = await pool2.query('SELECT className FROM classes WHERE classID = ?', [classID]);
+        const createdClassName = classResult[0].className;
+
+        const createdQuiz = {
+            quizID: quizID,
+            quizName: quizName,
+            className: createdClassName
+        };
+
         // Insert the questions and choices into the questions and choices tables
         for (const questionData of quizData) {
             const { question, choices, answer } = questionData;
@@ -315,12 +325,13 @@ app.post('/createQuiz', async (req, res) => {
             await pool2.query('INSERT INTO choices (questionID, option1, option2, option3, option4) VALUES (?, ?, ?, ?, ?)', [questionID, ...choices]);
         }
 
-        res.status(200).send('Quiz created successfully.');
+        res.status(200).json(createdQuiz);
     } catch (error) {
         console.error(error);
         return res.status(500).send('Server error');
     }
 });
+
 
 //retrieve quiz
 app.post('/retrieveQuizzes', async (req, res) => {
@@ -395,51 +406,51 @@ app.post('/retrieveQuizzes', async (req, res) => {
 app.get('/userDetails', async (req, res) => {
     const { email } = req.query;
     try {
-      // Retrieve the user's details based on the email
-      const [userResults] = await pool2.query('SELECT * FROM users WHERE email = ?', [email]);
-      const user = userResults[0];
-  
-      if (!user) {
-        return res.status(404).send('User not found');
-      }
-  
-      // Retrieve the class names and quiz details associated with the user
-      const [classResults] = await pool2.query(
-        `SELECT c.className, q.quizID, q.quizName
+        // Retrieve the user's details based on the email
+        const [userResults] = await pool2.query('SELECT * FROM users WHERE email = ?', [email]);
+        const user = userResults[0];
+
+        if (!user) {
+            return res.status(404).send('User not found');
+        }
+
+        // Retrieve the class names and quiz details associated with the user
+        const [classResults] = await pool2.query(
+            `SELECT c.className, q.quizID, q.quizName
          FROM classes c
          INNER JOIN user_classes uc ON c.classID = uc.classID
          INNER JOIN users u ON uc.userID = u.userID
          INNER JOIN quizzes q ON c.classID = q.classID
          WHERE u.email = ?`,
-        [email]
-      );
-  
-      const classQuizzes = {};
-  
-      for (const classData of classResults) {
-        const { className, quizID, quizName } = classData;
-  
-        if (!classQuizzes[className]) {
-          classQuizzes[className] = [];
+            [email]
+        );
+
+        const classQuizzes = {};
+
+        for (const classData of classResults) {
+            const { className, quizID, quizName } = classData;
+
+            if (!classQuizzes[className]) {
+                classQuizzes[className] = [];
+            }
+
+            classQuizzes[className].push({ quizID, quizName });
         }
-  
-        classQuizzes[className].push({ quizID, quizName });
-      }
-  
-      const userDetails = {
-        firstName: user.first_name,
-        lastName: user.last_name,
-        email: user.email,
-        classQuizzes: classQuizzes,
-      };
-      
-      res.status(200).json(userDetails);
+
+        const userDetails = {
+            firstName: user.first_name,
+            lastName: user.last_name,
+            email: user.email,
+            classQuizzes: classQuizzes,
+        };
+
+        res.status(200).json(userDetails);
     } catch (error) {
-      console.error(error);
-      return res.status(500).send('Server error');
+        console.error(error);
+        return res.status(500).send('Server error');
     }
-  });
-  
+});
+
 
 
 //record score for quiz
@@ -507,32 +518,32 @@ app.get('/getUserData', async (req, res) => {
 //set Quiz details
 app.post('/setQuizDetails', async (req, res) => {
     const { quizID, dueDate, timeLimit } = req.body;
-  
+
     try {
-      // Update the quiz details
-      await pool2.query('UPDATE quizzes SET dueDate = ?, timeLimit = ? WHERE quizID = ?', [dueDate, timeLimit, quizID]);
-  
-      // Retrieve the updated quiz details
-      const [quizResults] = await pool2.query('SELECT quizName, dueDate, timeLimit FROM quizzes WHERE quizID = ?', [quizID]);
-      const quiz = quizResults[0];
-  
-      if (!quiz) {
-        return res.status(404).send('Quiz not found');
-      }
-  
-      const quizDetails = {
-        quizName: quiz.quizName,
-        dueDate: quiz.dueDate,
-        timeLimit: quiz.timeLimit
-      };
-  
-      res.status(200).json(quizDetails);
+        // Update the quiz details
+        await pool2.query('UPDATE quizzes SET dueDate = ?, timeLimit = ? WHERE quizID = ?', [dueDate, timeLimit, quizID]);
+
+        // Retrieve the updated quiz details
+        const [quizResults] = await pool2.query('SELECT quizName, dueDate, timeLimit FROM quizzes WHERE quizID = ?', [quizID]);
+        const quiz = quizResults[0];
+
+        if (!quiz) {
+            return res.status(404).send('Quiz not found');
+        }
+
+        const quizDetails = {
+            quizName: quiz.quizName,
+            dueDate: quiz.dueDate,
+            timeLimit: quiz.timeLimit
+        };
+
+        res.status(200).json(quizDetails);
     } catch (error) {
-      console.error(error);
-      res.status(500).send('Error updating quiz details');
+        console.error(error);
+        res.status(500).send('Error updating quiz details');
     }
-  });
-  
+});
+
 
 app.post('/newClass', async (req, res) => {
     const className = req.body.className;
