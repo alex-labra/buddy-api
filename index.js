@@ -12,7 +12,7 @@ require('dotenv').config();
 // Enable CORS for all routes
 app.use(cors());
 
-// Create a connection pool for database
+// Create a callback function connection pool for database
 const pool = mysql.createPool({
     host: process.env.MYSQL_ADDON_HOST,
     port: process.env.MYSQL_ADDON_PORT,
@@ -58,122 +58,17 @@ function authenticateToken(req, res, next) {
     });
 }
 
-//check login info
-app.post('/login', async (req, res) => {
-    const { email, password } = req.body;
+//Login Route
+const loginRoute = require('./routes/login')(pool2, jwt, JWT_SECRET_KEY, options);
+app.use('/login', loginRoute);
 
-    if (!email || !password) {
-        return res.status(400).send('Email and password are required.');
-    }
+//Enroll of Students Route
+const enrollRoute = require('./routes/enroll')(pool2);
+app.use('/enroll', enrollRoute);
 
-    try {
-        // Check if user exists in the database
-        const [results] = await pool2.query('SELECT * FROM users WHERE email = ?', [email]);
-
-        const user = results[0];
-        if (!user || password !== user.password) {
-            return res.status(401).send('Authentication failed. Wrong email or password.');
-        }
-
-        // Create token and send it to the user
-        const token = jwt.sign({ email: user.email, type: user.type }, JWT_SECRET_KEY, options);
-        res.json({ token, type: user.type, email: user.email });
-    } catch (error) {
-        console.error(error);
-        return res.status(500).send('Server error');
-    }
-});
-
-//enroll students in a class
-app.post('/enroll', async (req, res) => {
-    const { emails, className, teacherEmail } = req.body;
-
-    if (!emails || !className) {
-        return res.status(400).send('Emails and class name are required.');
-    }
-
-    try {
-        const [teacherResults] = await pool2.query('SELECT userID FROM users WHERE email = ?', [teacherEmail]);
-        const teacherInfo = teacherResults[0];
-        teacherID = teacherInfo.userID;
-
-        // Check if the class exists
-        const [classResults] = await pool2.query('SELECT * FROM classes WHERE className = ? && teacherID = ?', [className, teacherID]);
-        const classInfo = classResults[0];
-        if (!classInfo) {
-            return res.status(404).send('Class not found.');
-        }
-
-        const classID = classInfo.classID;
-
-        for (const email of emails) {
-            // Check if the user exists
-            const [userResults] = await pool2.query('SELECT * FROM users WHERE email = ?', [email]);
-            const user = userResults[0];
-            if (!user) {
-                console.log(`User with email ${email} not found. Skipping enrollment.`);
-                continue;
-            }
-
-            const userID = user.userID;
-
-            // Check if the user is already enrolled in the class
-            const [enrollmentResults] = await pool2.query('SELECT * FROM user_classes WHERE userID = ? AND classID = ?', [userID, classID]);
-            if (enrollmentResults.length > 0) {
-                console.log(`User with email ${email} is already enrolled in the class. Skipping enrollment.`);
-                continue;
-            }
-
-            // Enroll the user in the class
-            await pool2.query('INSERT INTO user_classes (userID, classID) VALUES (?, ?)', [userID, classID]);
-            console.log(`User with email ${email} enrolled in the class successfully.`);
-        }
-
-        res.status(200).send('Enrollment completed.');
-    } catch (error) {
-        console.error(error);
-        return res.status(500).send('Server error');
-    }
-});
-
-//delete a class
-app.post('/delete-class', async (req, res) => {
-    const { className, userEmail } = req.body;
-
-    if (!className || !userEmail) {
-        return res.status(400).send('Class name and user email are required.');
-    }
-
-    try {
-        // Teacher details
-        const [teacherResults] = await pool2.query('SELECT type, userID FROM users WHERE email = ?', [userEmail]);
-        const teacherInfo = teacherResults[0];
-        const teacherType = teacherInfo.type;
-        const teacherID = teacherInfo.userID;
-
-        // Check if the user is a teacher
-        if (teacherType !== 'teacher') {
-            return res.status(403).send('Access denied. Only teachers can delete classes.');
-        }
-
-        // Check if the class exists
-        const [classResults] = await pool2.query('SELECT * FROM classes WHERE className = ? AND teacherID = ?', [className, teacherID]);
-        const classInfo = classResults[0];
-        if (!classInfo) {
-            return res.status(404).send('Class not found.');
-        }
-
-        const classID = classInfo.classID;
-
-        // Delete the class
-        await pool2.query('DELETE FROM classes WHERE classID = ?', [classID]);
-
-        res.status(200).send('Class deleted successfully.');
-    } catch (error) {
-        console.error(error);
-        return res.status(500).send('Server error');
-    }
-});
+//Delete a Class Route
+const deleteRoute = require('./routes/delete-class')(pool2);
+app.use('/delete-class', deleteRoute);
 
 //SETTINGS: update name
 app.post('/update-name', async (req, res) => {
@@ -314,16 +209,18 @@ app.post('/createQuiz', async (req, res) => {
         };
 
         // Insert the questions and choices into the questions and choices tables
+        // Insert the questions and choices into the questions and choices tables
         for (const questionData of quizData) {
             const { question, choices, answer } = questionData;
 
             // Insert the question into the questions table
-            const [questionResult] = await pool2.query('INSERT INTO questions (quizID, answer) VALUES (?, ?)', [quizID, answer]);
+            const [questionResult] = await pool2.query('INSERT INTO questions (quizID, question, answer) VALUES (?, ?, ?)', [quizID, question, answer]);
             const questionID = questionResult.insertId;
 
             // Insert the choices into the choices table
             await pool2.query('INSERT INTO choices (questionID, option1, option2, option3, option4) VALUES (?, ?, ?, ?, ?)', [questionID, ...choices]);
         }
+
 
         res.status(200).json(createdQuiz);
     } catch (error) {
@@ -375,7 +272,7 @@ app.post('/retrieveQuizzes', async (req, res) => {
 
                 questions.push({
                     questionID: question.questionID,
-                    question: question.question,
+                    question: question.question, // Include the question field
                     choices: choices,
                     answer: question.answer
                 });
