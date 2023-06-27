@@ -3,7 +3,7 @@ const router = express.Router();
 
 module.exports = (pool2) => {
 
-// Route for checking login information
+// Route for registering students
 router.post('/', async (req, res) => {
     const { emails, className, teacherEmail } = req.body;
 
