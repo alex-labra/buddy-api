@@ -82,206 +82,37 @@ app.use('/update-password', passwordUpdateRoute);
 const emailUpdateRoute = require('./routes/update-email')(pool2);
 app.use('/update-email', emailUpdateRoute);
 
-//create new quiz
+//Create New Quiz Route
 const createQuizRoute = require('./routes/createQuiz')(pool2);
 app.use('/createQuiz', createQuizRoute);
 
-//retrieve quiz
+//Retrieve Quizzes Route
 const retrieveQuizRoute = require('./routes/retrieveQuizzes')(pool2);
 app.use('/retrieveQuizzes', retrieveQuizRoute);
 
-//GET class details for teacher
-app.get('/userDetails', async (req, res) => {
-    const { email } = req.query;
-    try {
-        // Retrieve the user's details based on the email
-        const [userResults] = await pool2.query('SELECT * FROM users WHERE email = ?', [email]);
-        const user = userResults[0];
+//User Details Route
+const userDetailsRoute = require('./routes/userDetails')(pool2);
+app.use('/userDetails', userDetailsRoute);
 
-        if (!user) {
-            return res.status(404).send('User not found');
-        }
+//record score for quiz Route
+const recordScoreRoute = require('./routes/recordScore')(pool2);
+app.use('/recordScore', recordScoreRoute);
 
-        // Retrieve the class names and quiz details associated with the user
-        const [classResults] = await pool2.query(
-            `SELECT c.className, q.quizID, q.quizName
-         FROM classes c
-         INNER JOIN user_classes uc ON c.classID = uc.classID
-         INNER JOIN users u ON uc.userID = u.userID
-         INNER JOIN quizzes q ON c.classID = q.classID
-         WHERE u.email = ?`,
-            [email]
-        );
+//get all user data Route
+const getUserDataRoute = require('./routes/getUserData')(pool2);
+app.use('/getUserData', getUserDataRoute);
 
-        const classQuizzes = {};
+//set Quiz details Route
+const setQuizDetailsRoute = require('./routes/setQuizDetails')(pool2);
+app.use('/setQuizDetails', setQuizDetailsRoute);
 
-        for (const classData of classResults) {
-            const { className, quizID, quizName } = classData;
-
-            if (!classQuizzes[className]) {
-                classQuizzes[className] = [];
-            }
-
-            classQuizzes[className].push({ quizID, quizName });
-        }
-
-        const userDetails = {
-            firstName: user.first_name,
-            lastName: user.last_name,
-            email: user.email,
-            classQuizzes: classQuizzes,
-        };
-
-        res.status(200).json(userDetails);
-    } catch (error) {
-        console.error(error);
-        return res.status(500).send('Server error');
-    }
-});
-
-
-
-//record score for quiz
-app.post('/recordScore', async (req, res) => {
-    const { email, quizID, score } = req.body;
-
-    try {
-        // Get the userID based on email
-        const [userResults] = await pool2.query('SELECT userID FROM users WHERE email = ?', [email]);
-        const userID = userResults[0].userID;
-
-        // Insert the score into the scores table
-        await pool2.query('INSERT INTO scores (userID, quizID, score) VALUES (?, ?, ?)', [userID, quizID, score]);
-
-        res.status(200).send('Score recorded successfully');
-    } catch (err) {
-        console.error(err);
-        res.status(500).send('Error recording score');
-    }
-});
-
-//get all the user data
-app.get('/getUserData', async (req, res) => {
-    const { email } = req.query;
-
-    try {
-        // Get the user data based on email
-        const [userResults] = await pool2.query('SELECT userID, first_name, last_name, email, type FROM users WHERE email = ?', [email]);
-        const userData = userResults[0];
-
-        // Get the classes the user is registered to
-        const [classResults] = await pool2.query('SELECT * FROM classes WHERE classID IN (SELECT classID FROM user_classes WHERE userID = ?)', [userData.userID]);
-        userData.classes = classResults;
-
-        // Get the quizzes for each class
-        for (const classData of userData.classes) {
-            const [quizResults] = await pool2.query('SELECT * FROM quizzes WHERE classID = ?', [classData.classID]);
-            classData.quizzes = quizResults;
-
-            // Get the questions and choices for each quiz
-            for (const quizData of classData.quizzes) {
-                const [questionResults] = await pool2.query('SELECT * FROM questions WHERE quizID = ?', [quizData.quizID]);
-                quizData.questions = questionResults;
-
-                for (const questionData of quizData.questions) {
-                    const [choiceResults] = await pool2.query('SELECT * FROM choices WHERE questionID = ?', [questionData.questionID]);
-                    questionData.choices = choiceResults;
-                }
-
-                // Get the score for the quiz, if any
-                const [scoreResults] = await pool2.query('SELECT score FROM scores WHERE userID = ? AND quizID = ?', [userData.userID, quizData.quizID]);
-                if (scoreResults.length > 0) {
-                    quizData.score = scoreResults[0].score;
-                }
-            }
-        }
-
-        res.status(200).json(userData);
-    } catch (err) {
-        console.error(err);
-        res.status(500).send('Error retrieving user data');
-    }
-});
-
-//set Quiz details
-app.post('/setQuizDetails', async (req, res) => {
-    const { quizID, dueDate, timeLimit } = req.body;
-
-    try {
-        // Update the quiz details
-        await pool2.query('UPDATE quizzes SET dueDate = ?, timeLimit = ? WHERE quizID = ?', [dueDate, timeLimit, quizID]);
-
-        // Retrieve the updated quiz details
-        const [quizResults] = await pool2.query('SELECT quizName, dueDate, timeLimit FROM quizzes WHERE quizID = ?', [quizID]);
-        const quiz = quizResults[0];
-
-        if (!quiz) {
-            return res.status(404).send('Quiz not found');
-        }
-
-        const quizDetails = {
-            quizName: quiz.quizName,
-            dueDate: quiz.dueDate,
-            timeLimit: quiz.timeLimit
-        };
-
-        res.status(200).json(quizDetails);
-    } catch (error) {
-        console.error(error);
-        res.status(500).send('Error updating quiz details');
-    }
-});
-
-app.post('/newClass', async (req, res) => {
-    const { className, email } = req.body;
-    if (!email || !className) {
-      return res.status(400).send('Email and class name are required.');
-    }
-  
-    try {
-      const [typeResult] = await pool2.query('SELECT * FROM users WHERE email = ?', [email]);
-      const typeInfo = typeResult[0];
-      const userType = typeInfo.type;
-      const userU = typeInfo.userID;
-      const [classResults] = await pool2.query('SELECT * FROM classes WHERE className = ? AND teacherID = ?', [className, userU]);
-      
-      if (classResults.length === 0) {
-        if (userType === 'teacher') {
-          const [insertClassResult] = await pool2.query('INSERT INTO classes (className, teacherID) VALUES (?, ?)', [className, userU]);
-          const classID = insertClassResult.insertId;
-          await pool2.query('INSERT INTO user_classes (userID, classID) VALUES (?, ?)', [userU, classID]);
-          res.status(200).send('Class was added successfully.');
-        } else {
-          res.status(400).send('User is not a teacher.');
-        }
-      } else {
-        res.status(400).send('Class already exists for the teacher.');
-      }
-    } catch (error) {
-      console.log(error);
-      res.status(500).send('Server Error');
-    }
-  });
-  
+//New Class Route
+const newClassRoute = require('./routes/newClass')(pool2);
+app.use('/newClass', newClassRoute);
 
 // Endpoint to send newUser Data to the DataBase
-app.post('/newUser', (req, res) => {
-    const userID = req.body.userID;
-    const first_name = req.body.first_name;
-    const last_name = req.body.last_name;
-    const email = req.body.email;
-    const type = req.body.type;
-    const password = req.body.password;
-    const avatar = req.body.avatar;
-    pool.query('INSERT INTO users(first_name, last_name, email, type, password) VALUES(?,?,?,?,?)', [first_name, last_name, email, type, password, avatar], (error, results) => {
-        if (error) {
-            console.error('Error: ', error);
-            res.status(500).json({ Error: 'An error just ocurred!!!' })
-        } else {
-            res.send("Posted")
-        }
-    });
-})
+const newUserRoute = require('./routes/newUser')(pool);
+app.use('/newUser', newUserRoute);
 
 //Endpoint to send email to SendGrid API from contact form
 app.post('/emailService', (req, res) => {
@@ -311,5 +142,3 @@ app.post('/emailService', (req, res) => {
 app.listen(process.env.PORT, () => {
     console.log(`Server listening on port ${process.env.PORT}`);
 });
-
-
