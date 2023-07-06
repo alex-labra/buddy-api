@@ -1,5 +1,4 @@
 const express = require('express');
-const sgMail = require('@sendgrid/mail');
 const jwt = require('jsonwebtoken');
 const mysql = require('mysql2');
 const mysql2 = require('mysql2/promise'); //promise package
@@ -110,34 +109,13 @@ app.use('/setQuizDetails', setQuizDetailsRoute);
 const newClassRoute = require('./routes/newClass')(pool2);
 app.use('/newClass', newClassRoute);
 
-// Endpoint to send newUser Data to the DataBase
+// New User Route
 const newUserRoute = require('./routes/newUser')(pool);
 app.use('/newUser', newUserRoute);
 
-//Endpoint to send email to SendGrid API from contact form
-app.post('/emailService', (req, res) => {
-    const { email, fullName, phoneNumber, message } = req.body;
-
-    sgMail.setApiKey(process.env.SENDGRID_API_KEY);
-
-    const msg = {
-        to: process.env.ADMIN_EMAIL,
-        from: process.env.API_EMAIL,
-        subject: 'Study Buddy Contact Request',
-        text: `Name: ${fullName}\nEmail: ${email}\nPhone Number: ${phoneNumber}\n\n${message}`
-    };
-
-    sgMail
-        .send(msg)
-        .then(() => {
-            console.log('Email Sent!');
-            res.json({ message: 'Email was sent successfully!' });
-        })
-        .catch((error) => {
-            console.error(error);
-            res.status(500).json({ error: 'Error sending email' });
-        });
-});
+// Email Service Route
+const emailServiceRoute = require('./routes/emailService');
+app.use('/emailService', emailServiceRoute);
 
 app.listen(process.env.PORT, () => {
     console.log(`Server listening on port ${process.env.PORT}`);
